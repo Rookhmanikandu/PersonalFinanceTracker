@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+
+export const dynamic = 'force-dynamic';
+
+// In-memory storage for development
+let transactions: any[] = [];
 
 export async function PUT(
   request: NextRequest,
@@ -8,29 +11,26 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
     
-    const updateData = {
-      ...body,
-      amount: parseFloat(body.amount),
-      updatedAt: new Date().toISOString(),
-    };
+    const transactionIndex = transactions.findIndex(t => t._id === params.id);
     
-    const result = await db.collection('transactions').updateOne(
-      { _id: new ObjectId(params.id) },
-      { $set: updateData }
-    );
-    
-    if (result.matchedCount === 0) {
+    if (transactionIndex === -1) {
       return NextResponse.json(
         { error: 'Transaction not found' },
         { status: 404 }
       );
     }
     
-    const updatedTransaction = await db.collection('transactions').findOne({ _id: new ObjectId(params.id) });
-    return NextResponse.json(updatedTransaction);
+    const updateData = {
+      ...transactions[transactionIndex],
+      ...body,
+      amount: parseFloat(body.amount),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    transactions[transactionIndex] = updateData;
+    
+    return NextResponse.json(updateData);
   } catch (error) {
     console.error('Error updating transaction:', error);
     return NextResponse.json(
@@ -45,17 +45,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
+    const transactionIndex = transactions.findIndex(t => t._id === params.id);
     
-    const result = await db.collection('transactions').deleteOne({ _id: new ObjectId(params.id) });
-    
-    if (result.deletedCount === 0) {
+    if (transactionIndex === -1) {
       return NextResponse.json(
         { error: 'Transaction not found' },
         { status: 404 }
       );
     }
+    
+    transactions.splice(transactionIndex, 1);
     
     return NextResponse.json({ success: true });
   } catch (error) {

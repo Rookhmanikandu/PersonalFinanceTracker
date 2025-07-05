@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+
+export const dynamic = 'force-dynamic';
+
+// In-memory storage for development
+let budgets: any[] = [];
 
 export async function PUT(
   request: NextRequest,
@@ -8,30 +11,27 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
     
-    const updateData = {
-      ...body,
-      amount: parseFloat(body.amount),
-      year: parseInt(body.year),
-      updatedAt: new Date().toISOString(),
-    };
+    const budgetIndex = budgets.findIndex(b => b._id === params.id);
     
-    const result = await db.collection('budgets').updateOne(
-      { _id: new ObjectId(params.id) },
-      { $set: updateData }
-    );
-    
-    if (result.matchedCount === 0) {
+    if (budgetIndex === -1) {
       return NextResponse.json(
         { error: 'Budget not found' },
         { status: 404 }
       );
     }
     
-    const updatedBudget = await db.collection('budgets').findOne({ _id: new ObjectId(params.id) });
-    return NextResponse.json(updatedBudget);
+    const updateData = {
+      ...budgets[budgetIndex],
+      ...body,
+      amount: parseFloat(body.amount),
+      year: parseInt(body.year),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    budgets[budgetIndex] = updateData;
+    
+    return NextResponse.json(updateData);
   } catch (error) {
     console.error('Error updating budget:', error);
     return NextResponse.json(
@@ -46,17 +46,16 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
+    const budgetIndex = budgets.findIndex(b => b._id === params.id);
     
-    const result = await db.collection('budgets').deleteOne({ _id: new ObjectId(params.id) });
-    
-    if (result.deletedCount === 0) {
+    if (budgetIndex === -1) {
       return NextResponse.json(
         { error: 'Budget not found' },
         { status: 404 }
       );
     }
+    
+    budgets.splice(budgetIndex, 1);
     
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+
+export const dynamic = 'force-dynamic';
+
+// In-memory storage for development
+let transactions: any[] = [];
+let nextId = 1;
 
 export async function GET() {
   try {
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
-    const transactions = await db.collection('transactions')
-      .find({})
-      .sort({ createdAt: -1 })
-      .toArray();
-    
-    return NextResponse.json(transactions);
+    return NextResponse.json(transactions.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    ));
   } catch (error) {
     console.error('Error fetching transactions:', error);
     return NextResponse.json(
@@ -24,20 +23,19 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
     
     const transaction = {
+      _id: nextId.toString(),
       ...body,
       amount: parseFloat(body.amount),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     
-    const result = await db.collection('transactions').insertOne(transaction);
-    const newTransaction = await db.collection('transactions').findOne({ _id: result.insertedId });
+    transactions.push(transaction);
+    nextId++;
     
-    return NextResponse.json(newTransaction);
+    return NextResponse.json(transaction);
   } catch (error) {
     console.error('Error creating transaction:', error);
     return NextResponse.json(

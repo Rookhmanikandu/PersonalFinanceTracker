@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
-import { ObjectId } from 'mongodb';
+
+export const dynamic = 'force-dynamic';
+
+// In-memory storage for development
+let budgets: any[] = [];
+let nextId = 1;
 
 export async function GET() {
   try {
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
-    const budgets = await db.collection('budgets')
-      .find({})
-      .sort({ year: -1, month: -1 })
-      .toArray();
-    
-    return NextResponse.json(budgets);
+    return NextResponse.json(budgets.sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.month - a.month;
+    }));
   } catch (error) {
     console.error('Error fetching budgets:', error);
     return NextResponse.json(
@@ -24,10 +24,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const client = await clientPromise;
-    const db = client.db('personal_finance');
     
     const budget = {
+      _id: nextId.toString(),
       ...body,
       amount: parseFloat(body.amount),
       year: parseInt(body.year),
@@ -35,10 +34,10 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date().toISOString(),
     };
     
-    const result = await db.collection('budgets').insertOne(budget);
-    const newBudget = await db.collection('budgets').findOne({ _id: result.insertedId });
+    budgets.push(budget);
+    nextId++;
     
-    return NextResponse.json(newBudget);
+    return NextResponse.json(budget);
   } catch (error) {
     console.error('Error creating budget:', error);
     return NextResponse.json(
